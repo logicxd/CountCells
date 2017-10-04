@@ -106,7 +106,7 @@ namespace CountCells.Business
                 var currentX = x;
                 var nextCoordinates = (Tuple<int, int>)null;
                 var currentDirection = direction;
-                bool? isClockwise = null;
+                bool isClockwise = true;
 
                 // Traverse the path until: 
                 // it gets back to the original pixel OR
@@ -115,7 +115,7 @@ namespace CountCells.Business
                 while (true)
                 {
                     var nextDirections = (List<Direction>)null;
-                    var nextPossibleMoves = new List<Tuple<int, int>>();
+                    var nextPossibleMoves = new HashSet<Direction>();
 
                     nextCoordinates = CoordinatesFor(currentDirection, currentY, currentX);
                     _allVisitedCellPixels.Add(new Tuple<int, int>(currentY, currentX));
@@ -126,11 +126,11 @@ namespace CountCells.Business
                     nextDirections = GetNextDirections(currentDirection);
 
                     // Check if they're valid or not and add to a list.
-                    foreach (var possibleNextMove in nextDirections)
+                    foreach (var nextDirection in nextDirections)
                     {
                         if (IsValidCoordinate(image, nextCoordinates.Item1, nextCoordinates.Item2) && (IsSimilarColor(image[nextCoordinates.Item1, nextCoordinates.Item2], _cellLineColor1) || IsSimilarColor(image[nextCoordinates.Item1, nextCoordinates.Item2], _cellLineColor2)))
                         {
-                            nextPossibleMoves.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
+                            nextPossibleMoves.Add(nextDirection);
                         }
                     }
 
@@ -141,6 +141,11 @@ namespace CountCells.Business
 
                     // Choose one of neighbor pixel to follow. (Look ahead maybe 2 moves?)
                     // Determine isClockwise or not.
+                    if (nextPossibleMoves.Count == 1)
+                    {
+                        currentDirection = nextPossibleMoves.First();
+                        //currentY = next;
+                    }
 
                 }
 

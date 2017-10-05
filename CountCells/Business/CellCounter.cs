@@ -2,6 +2,7 @@
 using Emgu.CV.Structure;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -63,10 +64,14 @@ namespace CountCells.Business
             var count = 0;
 
             // Travels left to right, from top to bottom. 
-            for (int y = 0; y < image.Height; y = y + 3)
+            for (int y = 0; y < image.Height; ++y)
             {
                 for (int x = 0; x < image.Width; ++x)
                 {
+                    if (x == 170 && y == 104)
+                    {
+                        Console.WriteLine("2nd cell");
+                    }
                     if (IsSimilarColor(image[y,x], _cellLineColor1) || IsSimilarColor(image[y,x], _cellLineColor2))
                     {
                         if (!_allVisitedCellPixels.Contains(new Tuple<int, int>(y,x)))
@@ -83,11 +88,14 @@ namespace CountCells.Business
         private bool IsCell(Image<Bgr, Byte> image, int y, int x)
         {
             var isCell = false;
-            var surroundingOfInitialPixel = new List<Direction>();
+            var surroundingOfInitialPixel = new HashSet<Direction>();
             var traveledPixels = new HashSet<Tuple<int, int>>();
+            var orderedDirections = (List<Direction>)null;
+            bool isClockwise = true;
 
             _allVisitedCellPixels.Add(new Tuple<int, int>(y, x));
             traveledPixels.Add(new Tuple<int, int>(y, x));
+            //image[y, x] = new Bgr(48, 255, 190);
 
             // Initial set up. See which way the line seems to go. 
             foreach (Direction direction in Enum.GetValues(typeof(Direction)))
@@ -100,13 +108,14 @@ namespace CountCells.Business
                 }
             }
 
-            foreach (Direction direction in surroundingOfInitialPixel)
+            orderedDirections = OrderDirections(surroundingOfInitialPixel, isClockwise);
+
+            foreach (Direction direction in orderedDirections)
             {
                 var currentY = y;
                 var currentX = x;
                 var nextCoordinates = (Tuple<int, int>)null;
                 var currentDirection = direction;
-                bool isClockwise = true;
 
                 // Traverse the path until: 
                 // it gets back to the original pixel OR
@@ -118,8 +127,20 @@ namespace CountCells.Business
                     var nextPossibleMoves = new HashSet<Direction>();
 
                     nextCoordinates = CoordinatesFor(currentDirection, currentY, currentX);
-                    _allVisitedCellPixels.Add(new Tuple<int, int>(currentY, currentX));
-                    traveledPixels.Add(new Tuple<int, int>(currentY, currentX));
+
+                    _allVisitedCellPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
+                    traveledPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
+                    image[nextCoordinates.Item1, nextCoordinates.Item2] = new Bgr(48, 255, 190);
+                    image.Save("C:/Users/logic/Documents/IMAGE.jpg");
+                    // Back in a loop.
+                    if (nextCoordinates.Item1 == y && nextCoordinates.Item2 == x)
+                    {
+                        //image.Save("C:/Users/logic/Documents/IMAGE.jpg");
+                        if (traveledPixels.Count > 30)
+                            return true;
+                        else
+                            return false;
+                    }
                     // After this line, we're on the 'next' pixel. 
 
                     // Find valid neighbor pixels in the same direction.
@@ -128,7 +149,8 @@ namespace CountCells.Business
                     // Check if they're valid or not and add to a list.
                     foreach (var nextDirection in nextDirections)
                     {
-                        if (IsValidCoordinate(image, nextCoordinates.Item1, nextCoordinates.Item2) && (IsSimilarColor(image[nextCoordinates.Item1, nextCoordinates.Item2], _cellLineColor1) || IsSimilarColor(image[nextCoordinates.Item1, nextCoordinates.Item2], _cellLineColor2)))
+                        var coordinatesForNextDirection = CoordinatesFor(nextDirection, nextCoordinates.Item1, nextCoordinates.Item2);
+                        if (IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2) && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1) || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)))
                         {
                             nextPossibleMoves.Add(nextDirection);
                         }
@@ -139,17 +161,35 @@ namespace CountCells.Business
                         return false;
                     }
 
-                    // Choose one of neighbor pixel to follow. (Look ahead maybe 2 moves?)
-                    // Determine isClockwise or not.
+                    // Choose one of neighbor pixel to follow. Prepare 'current' values.
+
+                    // The next coordinates will become current coordinates after the iteration ends.
+                    currentY = nextCoordinates.Item1;
+                    currentX = nextCoordinates.Item2;
+
                     if (nextPossibleMoves.Count == 1)
                     {
                         currentDirection = nextPossibleMoves.First();
-                        //currentY = next;
                     }
+                    else if (nextPossibleMoves.Count == 2)
+                    {
+                        var straightDirections = GetStraightDirections(nextPossibleMoves);
+                        var diagonalDirections = GetDiagonalDirections(nextPossibleMoves);
 
+                        if (straightDirections.Count == 1)
+                        {
+                            currentDirection = straightDirections.First();
+                        }
+                        else
+                        {
+                            currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
+                        }
+                    }
+                    else
+                    {
+                        currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
+                    }
                 }
-
-
             }
 
             return isCell;
@@ -226,6 +266,118 @@ namespace CountCells.Business
                 default:
                     return new List<Direction>();
             }
+        }
+
+        public HashSet<Direction> GetStraightDirections(HashSet<Direction> directions)
+        {
+            var straightDirections = new HashSet<Direction>();
+
+            foreach (var direction in directions)
+            {
+                switch (direction)
+                {
+                    case Direction.NORTH:
+                    case Direction.EAST:
+                    case Direction.SOUTH:
+                    case Direction.WEST:
+                        straightDirections.Add(direction);
+                        break;
+                    default:
+                        break;
+                }
+            }
+                
+            return straightDirections;
+        }
+
+        public HashSet<Direction> GetDiagonalDirections(HashSet<Direction> directions)
+        {
+            var diagonalDirections = new HashSet<Direction>();
+
+            foreach (var direction in directions)
+            {
+                switch (direction)
+                {
+                    case Direction.NORTH_WEST:
+                    case Direction.NORTH_EAST:
+                    case Direction.SOUTH_EAST:
+                    case Direction.SOUTH_WEST:
+                        diagonalDirections.Add(direction);
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            return diagonalDirections;
+        }
+
+        public List<Direction> OrderDirections(HashSet<Direction> directions, bool isClockwise)
+        {
+            var orderedDirections = new List<Direction>(8);
+
+            if (isClockwise)
+            {
+                if (directions.Contains(Direction.NORTH_WEST))
+                    orderedDirections.Add(Direction.NORTH_WEST);
+                if (directions.Contains(Direction.NORTH))
+                    orderedDirections.Add(Direction.NORTH);
+                if (directions.Contains(Direction.NORTH_EAST))
+                    orderedDirections.Add(Direction.NORTH_EAST);
+                if (directions.Contains(Direction.EAST))
+                    orderedDirections.Add(Direction.EAST);
+                if (directions.Contains(Direction.SOUTH_EAST))
+                    orderedDirections.Add(Direction.SOUTH_EAST);
+                if (directions.Contains(Direction.SOUTH))
+                    orderedDirections.Add(Direction.SOUTH);
+                if (directions.Contains(Direction.SOUTH_WEST))
+                    orderedDirections.Add(Direction.SOUTH_WEST);
+                if (directions.Contains(Direction.WEST))
+                    orderedDirections.Add(Direction.WEST);
+            }
+            else
+            {
+                if (directions.Contains(Direction.SOUTH_WEST))
+                    orderedDirections.Add(Direction.SOUTH_WEST);
+                if (directions.Contains(Direction.SOUTH))
+                    orderedDirections.Add(Direction.SOUTH);
+                if (directions.Contains(Direction.SOUTH_EAST))
+                    orderedDirections.Add(Direction.SOUTH_EAST);
+                if (directions.Contains(Direction.EAST))
+                    orderedDirections.Add(Direction.EAST);
+                if (directions.Contains(Direction.NORTH_EAST))
+                    orderedDirections.Add(Direction.NORTH_EAST);
+                if (directions.Contains(Direction.NORTH))
+                    orderedDirections.Add(Direction.NORTH);
+                if (directions.Contains(Direction.NORTH_WEST))
+                    orderedDirections.Add(Direction.NORTH_WEST);
+                if (directions.Contains(Direction.WEST))
+                    orderedDirections.Add(Direction.WEST);
+            }
+
+            return orderedDirections;
+        }
+
+        // 'possibleDirections' must have at least one direction.
+        public Direction ChooseDirectionBasedOnCurrentAndPossibleDirections(List<Direction> allDirections, HashSet<Direction> validDirections, bool isClockwise)
+        {
+            if (isClockwise)
+            {
+                for (int i = allDirections.Count - 1; i >= 0; --i)
+                {
+                    if (validDirections.Contains(allDirections[i]))
+                        return allDirections[i];
+                }
+            }
+            else
+            {
+                for (int i = 0; i < allDirections.Count; ++i)
+                {
+                    if (validDirections.Contains(allDirections[i]))
+                        return allDirections[i];
+                }
+            }
+            return validDirections.First();
         }
     }
 }

@@ -24,19 +24,30 @@ namespace CountCells.Business
     public class CellCounter
     {
         private Bgr _cellLineColor1, _cellLineColor2;
+        private Bgr _visitedColor;
         private int _imageCount;
         private List<Image<Bgr, Byte>> _images;
         private List<int> _cellCount;
         private HashSet<Tuple<int, int>> _allVisitedCellPixels;
+        private float _largestCellSize;
+
+        private string _directory;
+        private bool _saveImageEveryChange;
+        private string _iterativeImageChangeDirectory;
 
         public CellCounter(int imageCount)
         {
             _cellLineColor1 = new Bgr(127, 127, 255);
             _cellLineColor2 = new Bgr(0, 0, 127);
+            _visitedColor = new Bgr(48, 255, 190); // Yellow
             _imageCount = imageCount;
             _images = new List<Image<Bgr, Byte>>(_imageCount);
             _cellCount = new List<int>(_imageCount);
             _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
+            _largestCellSize = 40;
+
+            _saveImageEveryChange = false;
+            _iterativeImageChangeDirectory = "C:/Users/logic/Documents/IMAGE.jpg";
         }
 
         /// <summary>
@@ -45,6 +56,7 @@ namespace CountCells.Business
         /// <param name="directory">The directory that contains all the picture files.</param>
         public void LoadImages(string directory)
         {
+            _directory = directory;
             for (int i = 1; i <= _imageCount; ++i)
             {
                 _images.Add(new Image<Bgr, byte>($"{directory}/frame ({i}).gif"));
@@ -55,7 +67,11 @@ namespace CountCells.Business
         {
             for (int i = 0; i < _imageCount; ++i)
             {
-                _cellCount[i] = CellCount(_images[i]);
+                _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
+
+                Console.WriteLine($"Checking frame {i+1}");
+                _cellCount.Add(CellCount(_images[i]));
+                _images[i].Save($"{_directory}/frame ({i+1}) counted.gif");
             }
         }
 
@@ -68,10 +84,6 @@ namespace CountCells.Business
             {
                 for (int x = 0; x < image.Width; ++x)
                 {
-                    if (x == 170 && y == 104)
-                    {
-                        Console.WriteLine("2nd cell");
-                    }
                     if (IsSimilarColor(image[y,x], _cellLineColor1) || IsSimilarColor(image[y,x], _cellLineColor2))
                     {
                         if (!_allVisitedCellPixels.Contains(new Tuple<int, int>(y,x)))
@@ -89,15 +101,14 @@ namespace CountCells.Business
         {
             var isCell = false;
             var surroundingOfInitialPixel = new HashSet<Direction>();
-            var traveledPixels = new HashSet<Tuple<int, int>>();
+            var traveledPixels = (HashSet<Tuple<int, int>>)null;
             var orderedDirections = (List<Direction>)null;
             bool isClockwise = true;
 
             _allVisitedCellPixels.Add(new Tuple<int, int>(y, x));
-            traveledPixels.Add(new Tuple<int, int>(y, x));
-            //image[y, x] = new Bgr(48, 255, 190);
+            image[y, x] = _visitedColor;
 
-            // Initial set up. See which way the line seems to go. 
+            // Initial set up.
             foreach (Direction direction in Enum.GetValues(typeof(Direction)))
             {
                 var coordinates = CoordinatesFor(direction, y, x);  // Item1 = y, Item2 = x
@@ -108,6 +119,13 @@ namespace CountCells.Business
                 }
             }
 
+            // More than 2 pixels next to each other, eliminate.
+            if (surroundingOfInitialPixel.Count >= 3)
+            {
+                IgnoreIntersectionCells(image, y, x);
+                return false;
+            }
+
             orderedDirections = OrderDirections(surroundingOfInitialPixel, isClockwise);
 
             foreach (Direction direction in orderedDirections)
@@ -116,6 +134,10 @@ namespace CountCells.Business
                 var currentX = x;
                 var nextCoordinates = (Tuple<int, int>)null;
                 var currentDirection = direction;
+                var numberOfTimesInTraveledPixels = 0;
+
+                traveledPixels = new HashSet<Tuple<int, int>>();
+                traveledPixels.Add(new Tuple<int, int>(y, x));
 
                 // Traverse the path until: 
                 // it gets back to the original pixel OR
@@ -127,30 +149,40 @@ namespace CountCells.Business
                     var nextPossibleMoves = new HashSet<Direction>();
 
                     nextCoordinates = CoordinatesFor(currentDirection, currentY, currentX);
+                    
+                    if (traveledPixels.Contains(new Tuple<int,int>(nextCoordinates.Item1, nextCoordinates.Item2)))
+                    {
+                        ++numberOfTimesInTraveledPixels;
+                    }
 
                     _allVisitedCellPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
                     traveledPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
-                    image[nextCoordinates.Item1, nextCoordinates.Item2] = new Bgr(48, 255, 190);
-                    image.Save("C:/Users/logic/Documents/IMAGE.jpg");
-                    // Back in a loop.
-                    if (nextCoordinates.Item1 == y && nextCoordinates.Item2 == x)
+
+                    image[nextCoordinates.Item1, nextCoordinates.Item2] = _visitedColor;
+                    if (_saveImageEveryChange)
+                        image.Save(_iterativeImageChangeDirectory);
+
+                    // Goal test.
+                    if (IsALoop(nextCoordinates.Item2, nextCoordinates.Item1, x, y, traveledPixels.Count, numberOfTimesInTraveledPixels))
                     {
-                        //image.Save("C:/Users/logic/Documents/IMAGE.jpg");
-                        if (traveledPixels.Count > 30)
-                            return true;
-                        else
-                            return false;
+                        _largestCellSize = (_largestCellSize + traveledPixels.Count) / 2.0f;
+                        return true;
                     }
                     // After this line, we're on the 'next' pixel. 
 
                     // Find valid neighbor pixels in the same direction.
-                    nextDirections = GetNextDirections(currentDirection);
+                    nextDirections = GetNextDirectionsFull(currentDirection);
 
                     // Check if they're valid or not and add to a list.
                     foreach (var nextDirection in nextDirections)
                     {
                         var coordinatesForNextDirection = CoordinatesFor(nextDirection, nextCoordinates.Item1, nextCoordinates.Item2);
-                        if (IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2) && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1) || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)))
+                        if (
+                                IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2)
+                                && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1)
+                                    || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)
+                                    || image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2].Equals(_visitedColor))
+                           )
                         {
                             nextPossibleMoves.Add(nextDirection);
                         }
@@ -158,7 +190,25 @@ namespace CountCells.Business
 
                     if (nextPossibleMoves.Count == 0)
                     {
-                        return false;
+                        // Check one more pixel beyond neighbor to double check.
+                        var extraCheck = CoordinatesFor(currentDirection, nextCoordinates.Item1, nextCoordinates.Item2);
+                        nextDirections = GetNextDirectionsPartial(currentDirection);
+                        currentY = extraCheck.Item1;
+                        currentX = extraCheck.Item2;
+
+                        foreach (var nextDirection in nextDirections)
+                        {
+                            var coordinatesForNextDirection = CoordinatesFor(nextDirection, extraCheck.Item1, extraCheck.Item2);
+                            if (IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2) && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1) || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)))
+                            {
+                                nextPossibleMoves.Add(nextDirection);
+                            }
+                        }
+
+                        if (nextPossibleMoves.Count == 0)
+                        {
+                            break;
+                        }
                     }
 
                     // Choose one of neighbor pixel to follow. Prepare 'current' values.
@@ -187,6 +237,8 @@ namespace CountCells.Business
                     }
                     else
                     {
+                        // Ignore all nearby pixels with 3 or more adjacent pixels but keep going.
+                        IgnoreIntersectionCells(image, nextCoordinates.Item1, nextCoordinates.Item2);
                         currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
                     }
                 }
@@ -195,10 +247,59 @@ namespace CountCells.Business
             return isCell;
         }
 
+        private void IgnoreIntersectionCells(Image<Bgr, Byte> image, int y, int x)
+        {
+            var surroundingOfInitialPixel = new HashSet<Direction>();
+            foreach (Direction direction in Enum.GetValues(typeof(Direction)))
+            {
+                var coordinates = CoordinatesFor(direction, y, x);  // Item1 = y, Item2 = x
+
+                if (
+                        IsValidCoordinate(image, coordinates.Item1, coordinates.Item2) 
+                        && (IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor1) 
+                            || IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor2))
+                        && !image[coordinates.Item1, coordinates.Item2].Equals(_visitedColor)
+                    )
+                {
+                    surroundingOfInitialPixel.Add(direction);
+                }
+            }
+
+            if (surroundingOfInitialPixel.Count < 3)
+                return;
+
+            foreach (var direction in surroundingOfInitialPixel)
+            {
+                var coordinates = CoordinatesFor(direction, y, x);  // Item1 = y, Item2 = x
+                if (!_allVisitedCellPixels.Contains(new Tuple<int, int>(coordinates.Item1, coordinates.Item2)))
+                {
+                    _allVisitedCellPixels.Add(new Tuple<int, int>(coordinates.Item1, coordinates.Item2));
+                    image[coordinates.Item1, coordinates.Item2] = _visitedColor;
+                    if (_saveImageEveryChange)
+                        image.Save(_iterativeImageChangeDirectory);
+                    IgnoreIntersectionCells(image, coordinates.Item1, coordinates.Item2);
+                }
+            }
+        }
+
+        private bool IsALoop(int initialX, int initialY, int currentX, int currentY, int countOfTraveledPixels, int numberOfTimesInTraveledPixels)
+        {
+            bool isLooping = false;
+            if (initialY == currentX && initialX == currentX && countOfTraveledPixels > _largestCellSize * .75)
+            {
+                isLooping = true;
+            }
+            else if (numberOfTimesInTraveledPixels > _largestCellSize * 1.25)
+            {
+                isLooping = true;
+            }
+            return isLooping;
+        }
+
         private bool IsSimilarColor(Bgr color1, Bgr color2)
         {
-            const int ColorDifference = 7;
-            const int TotalDifference = 10;
+            const int ColorDifference = 15;
+            const int TotalDifference = 20;
 
             var redDifference = Math.Abs(color1.Red - color2.Red);
             var greenDifference = Math.Abs(color1.Green - color2.Green);
@@ -243,7 +344,7 @@ namespace CountCells.Business
             return y >= 0 && y < image.Height && x >= 0 && x < image.Width;
         }
 
-        private List<Direction> GetNextDirections(Direction previousMove)
+        private List<Direction> GetNextDirectionsFull(Direction previousMove)
         {
             switch (previousMove)
             {
@@ -263,6 +364,31 @@ namespace CountCells.Business
                     return new List<Direction> { Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST };
                 case Direction.WEST:
                     return new List<Direction> { Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST, Direction.NORTH };
+                default:
+                    return new List<Direction>();
+            }
+        }
+
+        private List<Direction> GetNextDirectionsPartial(Direction previousMove)
+        {
+            switch (previousMove)
+            {
+                case Direction.NORTH_WEST:
+                    return new List<Direction> { Direction.WEST, Direction.NORTH_WEST, Direction.NORTH };
+                case Direction.NORTH:
+                    return new List<Direction> { Direction.NORTH_WEST, Direction.NORTH, Direction.NORTH_EAST };
+                case Direction.NORTH_EAST:
+                    return new List<Direction> { Direction.NORTH, Direction.NORTH_EAST, Direction.EAST };
+                case Direction.EAST:
+                    return new List<Direction> { Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST };
+                case Direction.SOUTH_EAST:
+                    return new List<Direction> { Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH };
+                case Direction.SOUTH:
+                    return new List<Direction> { Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST };
+                case Direction.SOUTH_WEST:
+                    return new List<Direction> { Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST };
+                case Direction.WEST:
+                    return new List<Direction> { Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST };
                 default:
                     return new List<Direction>();
             }

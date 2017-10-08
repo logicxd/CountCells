@@ -19,6 +19,14 @@ namespace CountCells
             cellCounter.LoadImages("C:/Users/logic/source/repos/CountCells/CountCells/Resources");
             cellCounter.ProcessCellCounter();
 
+            using (System.IO.StreamWriter file = new System.IO.StreamWriter("C:/Users/logic/source/repos/CountCells/CountCells/Resources/count.txt"))
+            {
+                foreach (var count in cellCounter.GetCellCounts())
+                {
+                    file.WriteLine(count);
+                }
+            }
+
             Console.WriteLine("Finished counting.");
         }
     }

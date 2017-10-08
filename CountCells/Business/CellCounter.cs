@@ -46,7 +46,7 @@ namespace CountCells.Business
             _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
             _largestCellSize = 40;
 
-            _saveImageEveryChange = false;
+            _saveImageEveryChange = true;
             _iterativeImageChangeDirectory = "C:/Users/logic/Documents/IMAGE.jpg";
         }
 
@@ -73,6 +73,11 @@ namespace CountCells.Business
                 _cellCount.Add(CellCount(_images[i]));
                 _images[i].Save($"{_directory}/frame ({i+1}) counted.gif");
             }
+        }
+
+        public List<int> GetCellCounts()
+        {
+            return _cellCount;
         }
 
         private int CellCount(Image<Bgr, Byte> image)
@@ -210,12 +215,14 @@ namespace CountCells.Business
                             break;
                         }
                     }
+                    else
+                    {
+                        // The next coordinates will become current coordinates after the iteration ends.
+                        currentY = nextCoordinates.Item1;
+                        currentX = nextCoordinates.Item2;
+                    }
 
                     // Choose one of neighbor pixel to follow. Prepare 'current' values.
-
-                    // The next coordinates will become current coordinates after the iteration ends.
-                    currentY = nextCoordinates.Item1;
-                    currentX = nextCoordinates.Item2;
 
                     if (nextPossibleMoves.Count == 1)
                     {
@@ -236,7 +243,7 @@ namespace CountCells.Business
                         }
                     }
                     else
-                    {
+                    {   // y == 123 x == 171
                         // Ignore all nearby pixels with 3 or more adjacent pixels but keep going.
                         IgnoreIntersectionCells(image, nextCoordinates.Item1, nextCoordinates.Item2);
                         currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);

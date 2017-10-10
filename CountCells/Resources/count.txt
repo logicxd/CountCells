@@ -1,40 +1,41 @@
-4
-2
-4
-2
-4
-4
-3
-4
-3
-3
-4
-4
-4
-4
-4
-3
-5
-7
-7
-8
-7
-8
-8
-8
-8
-8
-7
-9
-10
-11
-10
-15
-13
-14
-16
-16
-16
-16
-16
-14
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 4. Actual 4.
+Counted 5. Actual 5.
+Counted 5. Actual 5.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 8. Actual 8.
+Counted 9. Actual 9.
+Counted 10. Actual 10.
+Counted 10. Actual 10.
+Counted 12. Actual 12.
+Counted 16. Actual 16.
+Counted 16. Actual 16.
+Counted 16. Actual 16.
+Counted 16. Actual 16.
+Counted 16. Actual 16.
+Counted 16. Actual 16.
+Counted 17. Actual 17.
+Counted 17. Actual 17.
+Counted 18. Actual 17.
+Difference: 1. 0.997041420118343

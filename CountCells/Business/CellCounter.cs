@@ -23,13 +23,15 @@ namespace CountCells.Business
 
     public class CellCounter
     {
+        private bool _isTesting;
+
         private Bgr _cellLineColor1, _cellLineColor2;
         private Bgr _visitedColor;
         private int _imageCount;
         private List<Image<Bgr, Byte>> _images;
         private List<int> _cellCount;
         private HashSet<Tuple<int, int>> _allVisitedCellPixels;
-        private float _largestCellSize;
+        private float _averageCellSize;
 
         private string _directory;
         private bool _saveImageEveryChange;
@@ -37,6 +39,8 @@ namespace CountCells.Business
 
         public CellCounter(int imageCount)
         {
+            _isTesting = true;
+
             _cellLineColor1 = new Bgr(127, 127, 255);
             _cellLineColor2 = new Bgr(0, 0, 127);
             _visitedColor = new Bgr(48, 255, 190); // Yellow
@@ -44,9 +48,9 @@ namespace CountCells.Business
             _images = new List<Image<Bgr, Byte>>(_imageCount);
             _cellCount = new List<int>(_imageCount);
             _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
-            _largestCellSize = 40;
+            _averageCellSize = 40;
 
-            _saveImageEveryChange = true;
+            _saveImageEveryChange = _isTesting;
             _iterativeImageChangeDirectory = "C:/Users/logic/Documents/IMAGE.jpg";
         }
 
@@ -65,13 +69,27 @@ namespace CountCells.Business
 
         public void ProcessCellCounter()
         {
-            for (int i = 0; i < _imageCount; ++i)
+            if (_isTesting)
             {
+                var i = 0;
                 _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
 
-                Console.WriteLine($"Checking frame {i+1}");
+                Console.Write($"Checking frame {i + 1} ... ");
                 _cellCount.Add(CellCount(_images[i]));
-                _images[i].Save($"{_directory}/frame ({i+1}) counted.gif");
+                Console.WriteLine($" Got {_cellCount.First()} cells.");
+                _images[i].Save($"{_directory}/frame ({i + 1}) counted.gif");
+            }
+            else
+            {
+                for (int i = 0; i < _imageCount; ++i)
+                {
+                    _allVisitedCellPixels = new HashSet<Tuple<int, int>>();
+
+                    Console.Write($"Checking frame {i + 1} ... ");
+                    _cellCount.Add(CellCount(_images[i]));
+                    Console.WriteLine($" Got {_cellCount[i]} cells.");
+                    _images[i].Save($"{_directory}/frame ({i + 1}) counted.gif");
+                }
             }
         }
 
@@ -85,9 +103,9 @@ namespace CountCells.Business
             var count = 0;
 
             // Travels left to right, from top to bottom. 
-            for (int y = 0; y < image.Height; ++y)
+            for (int y = 0; y < image.Height; y = y + 1)
             {
-                for (int x = 0; x < image.Width; ++x)
+                for (int x = 0; x < image.Width; x = x + 1)
                 {
                     if (IsSimilarColor(image[y,x], _cellLineColor1) || IsSimilarColor(image[y,x], _cellLineColor2))
                     {
@@ -113,14 +131,16 @@ namespace CountCells.Business
             _allVisitedCellPixels.Add(new Tuple<int, int>(y, x));
             image[y, x] = _visitedColor;
 
-            // Initial set up.
-            foreach (Direction direction in Enum.GetValues(typeof(Direction)))
+            // Initial set up to find surrounding pixels that haven't been explored.
+            foreach (Direction eachDirection in Enum.GetValues(typeof(Direction)))
             {
-                var coordinates = CoordinatesFor(direction, y, x);  // Item1 = y, Item2 = x
+                var coordinates = CoordinatesFor(eachDirection, y, x);  // Item1 = y, Item2 = x
 
-                if (IsValidCoordinate(image, coordinates.Item1, coordinates.Item2) && (IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor1) || IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor2)))
+                if (IsValidCoordinate(image, coordinates.Item1, coordinates.Item2) && (IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor1) || IsSimilarColor(image[coordinates.Item1, coordinates.Item2], _cellLineColor2) 
+                    || image[coordinates.Item1, coordinates.Item2].Equals(_visitedColor))
+                    )
                 {
-                    surroundingOfInitialPixel.Add(direction);
+                    surroundingOfInitialPixel.Add(eachDirection);
                 }
             }
 
@@ -133,8 +153,9 @@ namespace CountCells.Business
 
             orderedDirections = OrderDirections(surroundingOfInitialPixel, isClockwise);
 
-            foreach (Direction direction in orderedDirections)
+            if (orderedDirections.Count > 0)
             {
+                var direction = orderedDirections.First();
                 var currentY = y;
                 var currentX = x;
                 var nextCoordinates = (Tuple<int, int>)null;
@@ -144,21 +165,22 @@ namespace CountCells.Business
                 traveledPixels = new HashSet<Tuple<int, int>>();
                 traveledPixels.Add(new Tuple<int, int>(y, x));
 
-                // Traverse the path until: 
-                // it gets back to the original pixel OR
-                // the current path runs into a deadend OR
-                // encounters a split road and isClockwise is unknown.
+                // Traverse the path.
                 while (true)
                 {
                     var nextDirections = (List<Direction>)null;
                     var nextPossibleMoves = new HashSet<Direction>();
 
                     nextCoordinates = CoordinatesFor(currentDirection, currentY, currentX);
-                    
-                    if (traveledPixels.Contains(new Tuple<int,int>(nextCoordinates.Item1, nextCoordinates.Item2)))
+
+                    if (traveledPixels.Contains(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2)))
                     {
                         ++numberOfTimesInTraveledPixels;
                     }
+                    //else
+                    //{
+                    //    numberOfTimesInTraveledPixels = 0;
+                    //}
 
                     _allVisitedCellPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
                     traveledPixels.Add(new Tuple<int, int>(nextCoordinates.Item1, nextCoordinates.Item2));
@@ -170,7 +192,7 @@ namespace CountCells.Business
                     // Goal test.
                     if (IsALoop(nextCoordinates.Item2, nextCoordinates.Item1, x, y, traveledPixels.Count, numberOfTimesInTraveledPixels))
                     {
-                        _largestCellSize = (_largestCellSize + traveledPixels.Count) / 2.0f;
+                        _averageCellSize = (_averageCellSize + traveledPixels.Count) / 2.0f;
                         return true;
                     }
                     // After this line, we're on the 'next' pixel. 
@@ -197,16 +219,45 @@ namespace CountCells.Business
                     {
                         // Check one more pixel beyond neighbor to double check.
                         var extraCheck = CoordinatesFor(currentDirection, nextCoordinates.Item1, nextCoordinates.Item2);
-                        nextDirections = GetNextDirectionsPartial(currentDirection);
+                        nextDirections = GetNextDirectionsFull(currentDirection);
                         currentY = extraCheck.Item1;
                         currentX = extraCheck.Item2;
 
                         foreach (var nextDirection in nextDirections)
                         {
                             var coordinatesForNextDirection = CoordinatesFor(nextDirection, extraCheck.Item1, extraCheck.Item2);
-                            if (IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2) && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1) || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)))
+                            if (
+                                    IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2)
+                                    && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1)
+                                        || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)
+                                        || image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2].Equals(_visitedColor))
+                                )
                             {
                                 nextPossibleMoves.Add(nextDirection);
+                            }
+                        }
+
+                        // One more time for corners.
+                        if (nextPossibleMoves.Count == 0)
+                        {
+                            extraCheck = CoordinatesFor(nextDirections.Last(), nextCoordinates.Item1, nextCoordinates.Item2);
+                            nextDirections = GetNextDirectionsFull(nextDirections.Last());
+                            currentY = extraCheck.Item1;
+                            currentX = extraCheck.Item2;
+
+
+                            foreach (var nextDirection in nextDirections)
+                            {
+                                var coordinatesForNextDirection = CoordinatesFor(nextDirection, extraCheck.Item1, extraCheck.Item2);
+                                if (
+                                        IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2)
+                                        && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1)
+                                            || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)
+                                            || image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2].Equals(_visitedColor))
+                                    )
+                                {
+                                    nextPossibleMoves.Add(nextDirection);
+                                }
                             }
                         }
 
@@ -226,19 +277,54 @@ namespace CountCells.Business
 
                     if (nextPossibleMoves.Count == 1)
                     {
-                        currentDirection = nextPossibleMoves.First();
+                        if (GetSideDirections(currentDirection).Contains(nextPossibleMoves.First()))
+                        {
+                            // Check one more pixel beyond neighbor to double check.
+                            var extraCheck = CoordinatesFor(currentDirection, nextCoordinates.Item1, nextCoordinates.Item2);
+                            var extraDirections = GetNextDirectionsFull(currentDirection);
+
+                            foreach (var nextDirection in extraDirections)
+                            {
+                                var coordinatesForNextDirection = CoordinatesFor(nextDirection, extraCheck.Item1, extraCheck.Item2);
+                                if (
+                                        IsValidCoordinate(image, coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2)
+                                        && (IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor1)
+                                            || IsSimilarColor(image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2], _cellLineColor2)
+                                            || image[coordinatesForNextDirection.Item1, coordinatesForNextDirection.Item2].Equals(_visitedColor))
+                                    )
+                                {
+                                    nextPossibleMoves.Add(nextDirection);
+                                }
+                            }
+
+                            currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
+                        }
+                        else
+                        {
+                            currentDirection = nextPossibleMoves.First();
+                        }
                     }
                     else if (nextPossibleMoves.Count == 2)
                     {
                         var straightDirections = GetStraightDirections(nextPossibleMoves);
-                        var diagonalDirections = GetDiagonalDirections(nextPossibleMoves);
 
                         if (straightDirections.Count == 1)
                         {
-                            currentDirection = straightDirections.First();
+                            var diagonalDirections = GetDiagonalDirections(nextPossibleMoves);
+
+                            if (SideAndCornerAreOpposite(straightDirections.First(), diagonalDirections.First()))
+                                currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
+                            else
+                                currentDirection = straightDirections.First();
                         }
                         else
                         {
+                            foreach (var straightDirection in straightDirections)
+                            {
+                                var markPoint = CoordinatesFor(straightDirection, nextCoordinates.Item1, nextCoordinates.Item2);
+                                image[markPoint.Item1, markPoint.Item2] = _visitedColor;
+                            }
+
                             currentDirection = ChooseDirectionBasedOnCurrentAndPossibleDirections(nextDirections, nextPossibleMoves, isClockwise);
                         }
                     }
@@ -250,7 +336,6 @@ namespace CountCells.Business
                     }
                 }
             }
-
             return isCell;
         }
 
@@ -292,11 +377,13 @@ namespace CountCells.Business
         private bool IsALoop(int initialX, int initialY, int currentX, int currentY, int countOfTraveledPixels, int numberOfTimesInTraveledPixels)
         {
             bool isLooping = false;
-            if (initialY == currentX && initialX == currentX && countOfTraveledPixels > _largestCellSize * .75)
+            if (initialX == currentX && initialY == currentY && countOfTraveledPixels > _averageCellSize * .80)
             {
                 isLooping = true;
+                //Console.WriteLine("E");
             }
-            else if (numberOfTimesInTraveledPixels > _largestCellSize * 1.25)
+            else
+            if (numberOfTimesInTraveledPixels > _averageCellSize)
             {
                 isLooping = true;
             }
@@ -304,7 +391,7 @@ namespace CountCells.Business
         }
 
         private bool IsSimilarColor(Bgr color1, Bgr color2)
-        {
+        { 
             const int ColorDifference = 15;
             const int TotalDifference = 20;
 
@@ -445,6 +532,27 @@ namespace CountCells.Business
             return diagonalDirections;
         }
 
+        private HashSet<Direction> GetSideDirections(Direction direction)
+        {
+            switch (direction)
+            {
+                case Direction.NORTH_WEST:
+                case Direction.SOUTH_EAST:
+                    return new HashSet<Direction> { Direction.SOUTH_WEST, Direction.NORTH_EAST };
+                case Direction.NORTH:
+                case Direction.SOUTH:
+                    return new HashSet<Direction> { Direction.WEST, Direction.EAST };
+                case Direction.NORTH_EAST:
+                case Direction.SOUTH_WEST:
+                    return new HashSet<Direction> { Direction.NORTH_WEST, Direction.SOUTH_EAST };
+                case Direction.EAST:
+                case Direction.WEST:
+                    return new HashSet<Direction> { Direction.NORTH, Direction.SOUTH };
+                default:
+                    return new HashSet<Direction>();
+            }
+        }
+
         public List<Direction> OrderDirections(HashSet<Direction> directions, bool isClockwise)
         {
             var orderedDirections = new List<Direction>(8);
@@ -489,6 +597,23 @@ namespace CountCells.Business
             }
 
             return orderedDirections;
+        }
+
+        public bool SideAndCornerAreOpposite(Direction side, Direction corner)
+        {
+            switch (side)
+            {
+                case Direction.NORTH:
+                    return corner == Direction.SOUTH_EAST || corner == Direction.SOUTH_WEST;
+                case Direction.EAST:
+                    return corner == Direction.NORTH_WEST || corner == Direction.SOUTH_WEST;
+                case Direction.SOUTH:
+                    return corner == Direction.NORTH_WEST || corner == Direction.NORTH_EAST;
+                case Direction.WEST:
+                    return corner == Direction.NORTH_EAST || corner == Direction.SOUTH_EAST;
+                default:
+                    return false;
+            }
         }
 
         // 'possibleDirections' must have at least one direction.

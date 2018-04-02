@@ -5,7 +5,7 @@ The program can count the number of - previously highlighted by another algorith
 Full report and the algorithm can be found here: https://github.com/logicxd/Research-CountCells/blob/master/CellCountResearch.pdf
 
 ## Count Process
-![before-and-after](media/during.png)
+![before-and-after](https://raw.githubusercontent.com/logicxd/Research-CountCells/master/Media/during.png)
 
 ## Before and After
-![before-and-after](media/before-and-after.png)
+![before-and-after](https://raw.githubusercontent.com/logicxd/Research-CountCells/master/Media/before-and-after.png)

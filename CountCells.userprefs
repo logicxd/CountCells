@@ -1,0 +1,14 @@
+﻿<Properties StartupConfiguration="{FF27D502-30D6-435C-BEF9-5A09774A33A3}|Default">
+  <MonoDevelop.Ide.Workbench ActiveDocument="CountCells/Program.cs">
+    <Files>
+      <File FileName="CountCells/Program.cs" Line="1" Column="1" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.ItemProperties.CountCells PreferredExecutionTarget="MonoDevelop.Default" />
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MultiItemStartupConfigurations />
+</Properties>
